@@ -1,14 +1,24 @@
 import os
-from flask import Flask
+from flask import Flask, url_for, redirect, render_template, request
 from flask_sqlalchemy import SQLAlchemy
+from wtforms import form, fields, validators
 import flask_admin as admin
+import flask_login as login
 from flask_security import SQLAlchemyUserDatastore, Security, UserMixin, RoleMixin
+from flask_admin.contrib import sqla
+from flask_admin import helpers, expose
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask_security.utils import encrypt_password
 
+
+# Create Flask application
 app = Flask(__name__)
+
+# Create dummy secrey key so we can use sessions
 app.config.from_pyfile('config.py')
 
 db = SQLAlchemy(app)
+
 
 roles_users = db.Table(
     'roles_users',
@@ -27,6 +37,7 @@ class Role(db.Model, RoleMixin):
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
+    login = db.Column(db.String(255), unique=True)
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(100))
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'))
@@ -38,6 +49,7 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary=roles_users,
                             backref=db.backref('users', lazy='dynamic'))
     company = db.relationship('Company', backref=db.backref('user_company'))
+
 
     def is_authenticated(self):
         return True
@@ -52,7 +64,7 @@ class User(db.Model, UserMixin):
         return self.id
 
     def __unicode__(self):
-        return self.first_name
+        return self.username
 
     def __str__(self):
         return self.email
@@ -133,10 +145,80 @@ class TrackHandler(db.Model):
     handle_at = db.Column(db.DateTime())
 
 
-user_datastore = SQLAlchemyUserDatastore(db, User, Role)
-security = Security(app, user_datastore)
+# Define login and registration forms (for flask-login)
+class LoginForm(form.Form):
+    email = fields.StringField(validators=[validators.required()])
+    senha = fields.PasswordField(validators=[validators.required()])
 
-admin = admin.Admin(app, 'ezzTracker Admin', template_mode="bootstrap3")
+    def validate_login(self, field):
+        user = self.get_user()
+
+        if user is None:
+            raise validators.ValidationError('Email invalido')
+
+        if not check_password_hash(user.password, self.senha.data):
+            raise validators.ValidationError('Senha invalida')
+
+    def get_user(self):
+        return db.session.query(User).filter_by(email=self.email.data).first()
+
+
+# Initialize flask-login
+def init_login():
+    login_manager = login.LoginManager()
+    login_manager.init_app(app)
+
+    # Create user loader function
+    @login_manager.user_loader
+    def load_user(user_id):
+        return db.session.query(User).get(user_id)
+
+
+# Create customized index view class that handles login & registration
+class MyAdminIndexView(admin.AdminIndexView):
+
+    @expose('/')
+    def index(self):
+        if not login.current_user.is_authenticated:
+            return redirect(url_for('.login_view'))
+        return super(MyAdminIndexView, self).index()
+
+    @expose('/login/', methods=('GET', 'POST'))
+    def login_view(self):
+        # handle user login
+        form = LoginForm(request.form)
+        if helpers.validate_form_on_submit(form):
+            user = form.get_user()
+            login.login_user(user)
+
+        if login.current_user.is_authenticated:
+            return redirect(url_for('.index'))
+        link = ''
+        self._template_args['form'] = form
+        self._template_args['link'] = link
+        return super(MyAdminIndexView, self).index()
+
+    @expose('/logout/')
+    def logout_view(self):
+        login.logout_user()
+        return redirect(url_for('.index'))
+
+
+# Flask views
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.errorhandler(403)
+def page_not_found(e):
+    return '<h1>HA HA! Vc nao tem autorizacao pra acessar esta pagina</h1>', 403
+
+
+# Initialize flask-login
+init_login()
+
+# Create admin
+admin = admin.Admin(app, 'ezzTracker Admin', index_view=MyAdminIndexView(), base_template='my_master.html')
 
 from admin_views import *
 
@@ -148,6 +230,7 @@ admin.add_view(ProductsView(Products, db.session))
 admin.add_view(OsView(Os, db.session))
 admin.add_view(StatusView(Status, db.session))
 admin.add_view(PriorityView(Priority, db.session))
+
 
 def build_ezztracker_db():
     """
@@ -171,13 +254,16 @@ def build_ezztracker_db():
         db.session.add(super_user_role)
         db.session.commit()
 
-        test_user = user_datastore.create_user(
+        user = User(
+            login='admin',
             first_name='Admin',
-            email='admin',
-            password=encrypt_password('admin'),
+            email='admin@ebizz.com.br',
+            password=generate_password_hash('admin'),
             company_id=1,
             roles=[user_role, super_user_role]
         )
+
+        db.session.add(user)
 
         first_names = [
             'Harry', 'Amelia', 'Oliver', 'Jack', 'Isabella', 'Charlie', 'Sophie', 'Mia',
@@ -193,19 +279,16 @@ def build_ezztracker_db():
         for i in range(len(first_names)):
             tmp_email = first_names[i].lower() + "." + last_names[i].lower() + "@example.com"
             tmp_pass = ''.join(random.choice(string.ascii_lowercase + string.digits) for i in range(10))
-            user_datastore.create_user(
+            user = User(
                 first_name=first_names[i],
                 last_name=last_names[i],
                 email=tmp_email,
-                password=encrypt_password(tmp_pass),
+                password=generate_password_hash(tmp_pass),
                 roles=[user_role, ]
             )
+            db.session.add(user)
         db.session.commit()
     return
-
-@app.route('/')
-def index():
-    return '<h1>Pagina inicial</h1>'
 
 if __name__ == '__main__':
 
