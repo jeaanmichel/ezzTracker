@@ -16,25 +16,30 @@ class UserView(sqla.ModelView):
         return False
 
     form_columns = ['first_name', 'last_name', 'company', 'email', 'telephone', 'password', 'active',
-                    'roles', 'confirmed_at']
+                    'roles']
     column_labels = dict(first_name='Primeiro nome', last_name='Sobrenome', company='Empresa', telephone='Telefone',
                          password='Senha', active='Ativo', roles='Funcao', confirmed_at='Confirmado')
     column_exclude_list = ['password', ]
-    column_descriptions = dict(first_name="Primeiro nome")
+    #column_descriptions = dict(first_name="Primeiro nome")
     # Define as colunas para busca
     column_searchable_list = ('first_name', 'email')
     # Define a ordem que sao mostradas as linhas: False ordem crescente, True ordem descendente
     column_default_sort = ('first_name', False)
     column_filters = ('first_name', 'email')
-    create_modal = True
+    create_modal = False
     edit_modal = True
 
     form_args = {
         'first_name': {
-            'validators': [validators.DataRequired(), validators.Length(min=5, max=50)]
-        },
+            'validators': [validators.DataRequired(), validators.Length(min=5, max=50)]},
         'password': {
-            'validators': [validators.DataRequired(), validators.Length(min=8, max=16)]
+            'validators': [validators.DataRequired(), validators.Length(min=8, max=16)]},
+        'last_name': {
+            'validators': [validators.DataRequired(), validators.Length(min=5, max=50)]},
+        'company': {
+            'validators': [validators.DataRequired()]},
+        'email': {
+            'validators': [validators.DataRequired(), validators.Email(), validators.Length(min=5, max=50)]
         }
     }
 
@@ -49,8 +54,27 @@ class UserView(sqla.ModelView):
 class TrackView(sqla.ModelView):
     form_columns = ['title', 'priority', 'product', 'requester', 'status', 'description']
     column_list = ('id', 'title', 'priority', 'requester', 'status')
-    create_modal = True
+    column_filters = ('title', 'priority', 'requester', 'status')
+    create_modal = False
     edit_modal = True
+
+    form_args = {
+        'title': {
+            'validators': [validators.DataRequired(), validators.Length(min=5)]
+        },
+        'priority': {
+            'validators': [validators.DataRequired()]
+        },
+        'product': {
+            'validators': [validators.DataRequired()]
+        },
+        'requester': {
+            'validators': [validators.DataRequired()]
+        },
+        'status': {
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:
@@ -64,8 +88,14 @@ class TrackView(sqla.ModelView):
 
 class CompanyView(sqla.ModelView):
     form_columns = ['company_name', 'description']
-    create_modal = True
+    create_modal = False
     edit_modal = True
+
+    form_args = {
+        'company_name':{
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:
@@ -79,8 +109,14 @@ class CompanyView(sqla.ModelView):
 
 class OsView(sqla.ModelView):
     form_columns = ['name', 'initials', 'version']
-    create_modal = True
+    create_modal = False
     edit_modal = True
+
+    form_args = {
+        'name': {
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:
@@ -101,8 +137,14 @@ class OsView(sqla.ModelView):
 
 class StatusView(sqla.ModelView):
     form_columns = ['name', ]
-    create_modal = True
+    create_modal = False
     edit_modal = True
+
+    form_args = {
+        'name': {
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:
@@ -116,8 +158,14 @@ class StatusView(sqla.ModelView):
 
 class PriorityView(sqla.ModelView):
     form_columns = ['name', ]
-    create_modal = True
+    create_modal = False
     edit_modal = True
+
+    form_args = {
+        'name': {
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:
@@ -131,6 +179,20 @@ class PriorityView(sqla.ModelView):
 
 class ProductsView(sqla.ModelView):
     form_columns = ['name', 'initials', 'version', 'company', 'os']
+    create_modal = False
+    edit_modal = True
+
+    form_args = {
+        'name': {
+            'validators': [validators.DataRequired()]
+        },
+        'company': {
+            'validators': [validators.DataRequired()]
+        },
+        'os': {
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:
@@ -143,7 +205,18 @@ class ProductsView(sqla.ModelView):
 
 
 class TrackHandlerView(sqla.ModelView):
-    form_columns = ['handler', 'tracker', 'handle_at']
+    form_columns = ['handler', 'tracker']
+    create_modal = False
+    edit_modal = True
+
+    form_args = {
+        'handler': {
+            'validators': [validators.DataRequired()]
+        },
+        'tracker': {
+            'validators': [validators.DataRequired()]
+        }
+    }
 
     def is_accessible(self):
         if not login.current_user.is_active or not login.current_user.is_authenticated:

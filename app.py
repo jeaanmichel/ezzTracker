@@ -64,7 +64,7 @@ class User(db.Model, UserMixin):
         return self.id
 
     def __unicode__(self):
-        return self.username
+        return self.email
 
     def __str__(self):
         return self.email
