@@ -1,4 +1,10 @@
+from app import app
+from flask import url_for, redirect, render_template, request
+from admin_models import db, User, Company, Track, TrackHandler, Priority, Products, Os, Status
+from admin_forms import LoginForm
 from flask_admin.contrib import sqla
+from flask_admin import helpers, expose
+import flask_admin as admin
 from wtforms import validators, PasswordField
 import flask_login as login
 from werkzeug.security import generate_password_hash
@@ -6,7 +12,7 @@ from werkzeug.security import generate_password_hash
 
 class UserView(sqla.ModelView):
     def is_accessible(self):
-        
+
         if not login.current_user.is_active or not login.current_user.is_authenticated:
             return False
 
@@ -226,3 +232,74 @@ class TrackHandlerView(sqla.ModelView):
             return True
 
         return False
+
+
+# Initialize flask-login
+def init_login():
+    login_manager = login.LoginManager()
+    login_manager.init_app(app)
+
+    # Create user loader function
+    @login_manager.user_loader
+    def load_user(user_id):
+        return db.session.query(User).get(user_id)
+
+
+# Create customized index view class that handles login & registration
+class MyAdminIndexView(admin.AdminIndexView):
+
+    @expose('/')
+    def index(self):
+        if not login.current_user.is_authenticated:
+            return redirect(url_for('.login_view'))
+        return super(MyAdminIndexView, self).index()
+
+    @expose('/login/', methods=('GET', 'POST'))
+    def login_view(self):
+        # handle user login
+        form = LoginForm(request.form)
+        if helpers.validate_form_on_submit(form):
+            user = form.get_user()
+
+            if user:
+                login.login_user(user)
+
+        if login.current_user.is_authenticated:
+            return redirect(url_for('.index'))
+        link = ''
+        self._template_args['form'] = form
+        self._template_args['link'] = link
+        return super(MyAdminIndexView, self).index()
+
+    @expose('/logout/')
+    def logout_view(self):
+        login.logout_user()
+        return redirect(url_for('.index'))
+
+
+# Flask views
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@app.errorhandler(403)
+def page_not_found(e):
+    return '<h1>HA HA! Vc nao tem autorizacao pra acessar esta pagina</h1>', 403
+
+
+# Initialize flask-login
+init_login()
+
+# Create admin
+admin = admin.Admin(app, 'ezzTracker Admin', index_view=MyAdminIndexView(), base_template='my_master.html')
+
+admin.add_view(TrackView(Track, db.session))
+admin.add_view(TrackHandlerView(TrackHandler, db.session))
+admin.add_view(UserView(User, db.session))
+admin.add_view(CompanyView(Company, db.session))
+admin.add_view(ProductsView(Products, db.session))
+admin.add_view(OsView(Os, db.session))
+admin.add_view(StatusView(Status, db.session))
+admin.add_view(PriorityView(Priority, db.session))
+
